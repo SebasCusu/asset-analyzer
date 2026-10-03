@@ -1,19 +1,19 @@
 import sqlite3
 
-conexion = sqlite3.connect("mi_base.db")
+conexion = sqlite3.connect("transactions.db")
 cursor = conexion.cursor()
 
 cursor.execute(
-    "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)"
+    "CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT,  type TEXT, amount REAL)"
 )
 
-cursor.execute("INSERT INTO users (name, age) VALUES ('John', 30)")
-cursor.execute("INSERT INTO users (name, age) VALUES ('Luke', 15)")
-cursor.execute("INSERT INTO users (name, age) VALUES ('Mathew', 14)")
+cursor.execute("INSERT INTO transactions (type, amount) VALUES ('deposit', 100.0)")
+cursor.execute("INSERT INTO transactions (type, amount) VALUES ('withdrawal', 50.0)")
+cursor.execute("INSERT INTO transactions (type, amount) VALUES ('deposit', 200.0)")
+
+
+d = cursor.execute("SELECT * FROM TRANSACTIONS")
+print(d.fetchall())
 
 conexion.commit()
-
-cursor.execute("SELECT * FROM users")
-print(cursor.fetchall())
-
 conexion.close()
