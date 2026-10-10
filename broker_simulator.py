@@ -1,173 +1,155 @@
+import sqlite3
 import yfinance as yf
 
+# Database initialization
+conn = sqlite3.connect('broker_db')
+cur = conn.cursor()
 
-# Represents a user in the broker simulator.
+# Schema for storing persistent user account state
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS user_data (
+        id INTEGER PRIMARY KEY,
+        balance REAL,
+        shares INTEGER
+    )
+""")
+
+# Seed initial balance if database is completely new
+cur.execute("INSERT OR IGNORE INTO user_data (id, balance, shares) VALUES (1, 5000, 0)")
+conn.commit()
+
+
 class User:
-
-    # Initializes the user's balance and number of shares.
-    def __init__(self, saldo, cantidad_acciones):
-        self.cantidad_acciones = cantidad_acciones
-        self.saldo = saldo
-
-    # Withdraws money from the user's balance.
-    def retirar(self, cantidad):
-
-        # Checks if the user has enough funds.
-        if cantidad > self.saldo:
-            print("Insufficient Funds")
+    def __init__(self, balance, shares):
+        self.balance = balance
+        self.shares = shares
+    
+    def deposit(self, deposit_amount):
+        if deposit_amount <= 0:
+            print("Invalid amount")
             return False
-
-        # Checks if the withdrawal amount is valid.
-        if cantidad <= 0:
-            print("Invalid Withdrawal")
-            return False
-
-        # Subtracts the withdrawal amount from the balance.
-        self.saldo -= cantidad
-
-        print(f"\nWithdrawal Successful: {cantidad}")
-        print(f"Balance: {self.saldo:.2f}")
-
-        # Returns True when the operation is successful.
+        
+        self.balance += deposit_amount
+        print(f"Successfully deposited: ${deposit_amount:.2f}")
+        
+        # Sync current state to database
+        cur.execute('''UPDATE user_data 
+                    SET balance = ?, shares = ? 
+                    WHERE id = 1''', (self.balance, self.shares))
+        conn.commit()
         return True
-
-    # Adds money to the user's balance.
-    def depositar(self, cantidad):
-
-        # Prevents deposits of zero or negative amounts.
-        if cantidad <= 0:
-            print("Invalid Deposit")
+    
+    def buy_shares(self, price, buy_quantity):
+        total_cost = price * buy_quantity
+        
+        if buy_quantity <= 0:
+            print("Invalid purchase quantity")
             return False
-
-        # Adds the amount to the user's balance.
-        self.saldo += cantidad
-
-        print(f"\nDeposit Successful: {cantidad}")
-        print(f"Balance: {self.saldo:.2f}")
-
+        
+        if total_cost > self.balance:
+            print("Insufficient funds")
+            return False
+        
+        # Process transaction logic
+        self.balance -= total_cost
+        self.shares += buy_quantity
+        print(f"Successfully bought {buy_quantity} shares")
+        
+        # Sync transaction updates to database
+        cur.execute('''UPDATE user_data 
+                    SET balance = ?, shares = ? 
+                    WHERE id = 1''', (self.balance, self.shares))
+        conn.commit()
         return True
-
-    # Buys shares using the user's available balance.
-    def comprar_acciones(self, cantidad_compra, precio_accion):
-
-        # Calculates the total cost of the purchase.
-        operacion = cantidad_compra * precio_accion
-
-        # Checks if the number of shares is valid.
-        if cantidad_compra <= 0:
-            print("Invalid Purchase")
+    
+    def sell_shares(self, price, sell_quantity):
+        total_cost = price * sell_quantity
+        
+        if sell_quantity <= 0:
+            print("Invalid sale quantity")
             return False
-
-        # Checks if the user has enough funds.
-        if operacion > self.saldo:
-            print("Insufficient Funds")
+        
+        if sell_quantity > self.shares:
+            print("Insufficient shares")
             return False
-
-        # Subtracts the purchase cost from the balance.
-        self.saldo -= operacion
-
-        # Adds the purchased shares to the user's portfolio.
-        self.cantidad_acciones += cantidad_compra
-
-        print(f"\nSuccessfully Purchased {cantidad_compra} Shares")
-        print(f"Balance: {self.saldo:.2f}")
-        print(f"Total Shares: {self.cantidad_acciones}")
-
-        return True
-
-    # Sells shares owned by the user.
-    def vender_acciones(self, cantidad_venta, precio_accion):
-
-        # Calculates the total value of the shares being sold.
-        operacion = cantidad_venta * precio_accion
-
-        # Checks if the number of shares is valid.
-        if cantidad_venta <= 0:
-            print("Invalid Sale")
-            return False
-
-        # Checks if the user owns enough shares.
-        if cantidad_venta > self.cantidad_acciones:
-            print("You Do Not Own Enough Shares")
-            return False
-
-        # Adds the sale proceeds to the user's balance.
-        self.saldo += operacion
-
-        # Removes the sold shares from the user's portfolio.
-        self.cantidad_acciones -= cantidad_venta
-
-        print(f"\nSuccessfully Sold {cantidad_venta} Shares")
-        print(f"Balance: {self.saldo:.2f}")
-        print(f"Total Shares: {self.cantidad_acciones}")
-
+        
+        # Process transaction logic
+        self.balance += total_cost
+        self.shares -= sell_quantity
+        print(f"Successfully sold {sell_quantity} shares")
+        
+        # Sync transaction updates to database
+        cur.execute('''UPDATE user_data 
+                    SET balance = ?, shares = ? 
+                    WHERE id = 1''', (self.balance, self.shares))
+        conn.commit()
         return True
 
 
-# Displays the available options to the user.
-def mostrar_menu():
-    print("\n1: Deposit")
-    print("2: Withdraw")
-    print("3: Buy Shares")
-    print("4: Sell Shares")
+def display_menu():
+    print("\n1: Deposit Cash")
+    print("2: Buy Shares")
+    print("3: Sell Shares")
+    print("4: View Portfolio Data")
     print("5: Exit")
 
 
-# Main function that runs the broker simulator.
 def main():
+    # Load previously saved data to restore user session state
+    cur.execute("SELECT balance, shares FROM user_data WHERE id = 1")
+    row = cur.fetchone() 
+    
+    saved_balance = row[0]
+    saved_shares = row[1]
+    
+    # Instantiate user with persistent database values
+    user1 = User(saved_balance, saved_shares)
 
-    # Gets the current AAPL stock price using yfinance.
-    precio = yf.Ticker("AAPL").fast_info["last_price"]
-
-    # Creates a user with $5,000 and 0 shares.
-    user1 = User(5000, 0)
-
-    print("Broker Simulator")
-
-    # Keeps the program running until the user chooses to exit.
+    # Fetch dynamic real-time market data
+    ticker = "AAPL"
+    stock = yf.Ticker(ticker)
+    price = stock.fast_info["last_price"]
+    clean_price = round(price, 2)
+    
+    print(f"Loaded live price for {ticker}: ${clean_price}")
+    
     while True:
-        mostrar_menu()
-
         try:
-            # Gets the user's menu selection.
-            decision = int(input("What do you want to do?: "))
-
-            # Deposit money.
-            if decision == 1:
-                cantidad_deposito = float(
-                    input("How much money do you want to deposit?: ")
-                )
-                user1.depositar(cantidad_deposito)
-
-            # Withdraw money.
-            elif decision == 2:
-                cantidad_retiro = float(
-                    input("How much money do you want to withdraw?: ")
-                )
-                user1.retirar(cantidad_retiro)
-
-            # Buy shares.
-            elif decision == 3:
-                cantidad_compra = int(
-                    input("How many shares do you want to buy?: ")
-                )
-                user1.comprar_acciones(cantidad_compra, precio)
-
-            # Sell shares.
-            elif decision == 4:
-                cantidad_venta = int(
-                    input("How many shares do you want to sell?: ")
-                )
-                user1.vender_acciones(cantidad_venta, precio)
-
-            # Exit the program.
-            elif decision == 5:
+            display_menu()
+            choice = int(input("Select an option: "))
+            
+            if choice == 1:
+                deposit_amount = float(input("Enter deposit amount: "))
+                user1.deposit(deposit_amount)
+            
+            elif choice == 2:
+                buy_quantity = int(input("How many shares do you want to buy?: "))
+                user1.buy_shares(clean_price, buy_quantity)
+            
+            elif choice == 3:
+                sell_quantity = int(input("How many shares do you want to sell?: "))
+                user1.sell_shares(clean_price, sell_quantity)
+            
+            elif choice == 4:
+                cur.execute("SELECT * FROM user_data")
+                rows = cur.fetchall()
+                for row in rows:
+                    print(f"\nBalance: {row[1]:.2f} USD | Shares: {row[2]}")
+            
+            elif choice == 5:
+                print("Exiting broker simulator bye!")
                 break
-
-        # Handles invalid numeric input.
+            
+            else:
+                print("Invalid option")
+                
         except ValueError:
-            print("Invalid Option")
+            # Trap non-integer inputs to prevent menu crashes
+            print("Only integers allowed in menu selection")
 
-# Runs the main function when this file is executed directly.
+
 if __name__ == "__main__":
     main()
+
+# Clean up resources before exiting application
+conn.close()
