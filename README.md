@@ -1,50 +1,34 @@
-Broker Simulator
 
-A simple terminal-based stock broker simulator built with Python.
+Asset Analyzer
+
+A high-performance quantitative financial analysis web application built to process market data, compute risk metrics, and maintain local data persistence.
 
 Features
 
-Deposit money
+• Data Retrieval: Integrated with Yahoo Finance API to pull historical closing prices.
+• Vectorized Engine: Utilizes NumPy for high-speed mathematical computations.
+• Statistical Analytics: Computes maximum, minimum, average, and annualized volatility.
+• Data Persistence: Structures storage and logs analytical history using SQLite3.
+• Modern Interface: Powered by Streamlit with asynchronous progress trackers.
 
-Withdraw money
+Tech Stack
 
-Buy shares
+• Python
+• SQLite3
+• NumPy
+• yfinance API
+• Streamlit
 
-Sell shares
+Core Modularity
 
-Track account balance
+1. download_data: Downloads and flattens market data frames into continuous raw arrays.
+2. calculate_statistics: Executes matrix mathematical operations via NumPy vectorization.
+3. insert_data: Maps and saves variables into the relational SQLite3 schema.
 
-Track owned shares
+Installation and Execution
 
-Get AAPL stock price using yfinance
-
-Technologies
-
-Python
-
-yfinance
-
-Installation
-
-Clone the repository:
-
-git clone https://github.com/SebasCusu/broker-simulator.git
-
-
-Navigate to the project directory:
-
-cd broker-simulator
-
-
-Install the required dependencies:
-
+bash
+git clone https://github.com
+cd streamlit-asset-anlyzer
 pip install -r requirements.txt
-
-
-Run the simulator:
-
-python broker_simulator.py
-
-Disclaimer
-
-This is an educational project. It does not perform real stock trades or handle real money.
+streamlit run app.py
