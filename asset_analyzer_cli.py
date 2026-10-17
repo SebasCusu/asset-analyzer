@@ -5,64 +5,70 @@ import sqlite3
 conn = sqlite3.connect('my_db')
 cur = conn.cursor()
 
+# Initialize database table to store calculated asset metrics
 cur.execute('''
-    CREATE TABLE IF NOT EXISTS datos_ticker (
+    CREATE TABLE IF NOT EXISTS ticker_data (
         ticker TEXT,
-        maximo REAL,
-        minimo REAL,
-        promedio REAL,
-        volatilidad REAL
+        maximum REAL,
+        minimum REAL,
+        average REAL,
+        volatility REAL
     )
 ''')
 conn.commit()
 
 class Asset:
-    def __init__(self, nombre):
-        self.nombre = nombre
+    # Represents a financial asset and manages its data workflow
+    def __init__(self, name):
+        self.name = name
     
-    def descargar_datos(self, start_date:int, end_date:int) -> float:
-        datos = yf.download(self.nombre, start=start_date, end=end_date)
-        if datos.empty:
+    def download_data(self, start_date: str, end_date: str):
+        data = yf.download(self.name, start=start_date, end=end_date)
+        if data.empty:
             return None
         
         else:
-            precios_cierre = datos["Close"].to_numpy().flatten()
-            return precios_cierre
+            # Extract closing prices and flatten into a 1D array
+            closing_prices = data["Close"].to_numpy().flatten()
+            return closing_prices
         
-    def analizar_datos(self,precios):
-        maximo = np.max(precios)
-        minimo = np.min(precios)
-        promedio = np.mean(precios)
-        volatilidad = np.std(precios)
-        return maximo,minimo,promedio,volatilidad
+    def analyze_data(self, prices):
+        # Compute key statistical metrics from the price series
+        maximum = np.max(prices)
+        minimum = np.min(prices)
+        average = np.mean(prices)
+        volatility = np.std(prices)
+        return maximum, minimum, average, volatility
     
-    def insertar_datos(self,maximo,minimo,promedio,volatilidad):
-        cur.execute('''INSERT INTO datos_ticker
-                    (ticker, maximo, minimo, promedio, volatilidad) VALUES (?, ?, ?, ?, ?)''',
-                    (self.nombre, round(maximo,2), round(minimo,2), round(promedio,2), round(volatilidad,2)))
+    def insert_data(self, maximum, minimum, average, volatility):
+        # Save rounded metrics into the SQLite database
+        cur.execute('''INSERT INTO ticker_data
+                    (ticker, maximum, minimum, average, volatility) VALUES (?, ?, ?, ?, ?)''',
+                    (self.name, round(maximum, 2), round(minimum, 2), round(average, 2), round(volatility, 2)))
         conn.commit()
         
-    def observar_datos(self):
-        contenido = cur.execute('SELECT * FROM datos_ticker')
-        if not contenido:
-            print("No hay datos")
+    def view_data(self):
+        # Query and display all records currently stored in the database
+        content = cur.execute('SELECT * FROM ticker_data')
+        if not content:
+            print("No data available")
         else:
-            datos = contenido.fetchall()
-            for dato in datos:
-                print(dato)
+            records = content.fetchall()
+            for record in records:
+                print(record)
                 
 
 def main():
-    asset1 = Asset("TSLA")
-    precios = asset1.descargar_datos("2025-1-1","2026-1-1")
-    if precios is not None:
-        datos = asset1.analizar_datos(precios)
-        maximo,minimo,promedio,volatilidad = datos
-        asset1.insertar_datos(maximo,minimo,promedio,volatilidad)
-        print(asset1.observar_datos())
+    asset1 = Asset("BTC-USD")
+    prices = asset1.download_data("2025-1-1", "2026-1-1")
+    if prices is not None:
+        data = asset1.analyze_data(prices)
+        maximum, minimum, average, volatility = data
+        asset1.insert_data(maximum, minimum, average, volatility)
+        print(asset1.view_data())
 
     else:
-        print("Hubo un error")
+        print("There was an error")
 
 if __name__ == "__main__":
     main()
