@@ -1,80 +1,136 @@
+
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import sqlite3
 
-class BaseDeDatos:
-    def __init__(self, nombre_db:str, nombre_tabla:str):
-        self.nombre_db = nombre_db
-        self.nombre_tabla = nombre_tabla
-        
-    def crear_tabla(self):
-        conn = sqlite3.connect(self.nombre_db)
-        cur = conn.cursor()
-        cur.execute("""
+
+# This class handles the database stuff
+class Database:
+    def __init__(self, database_name: str, table_name: str):
+        self.database_name = database_name
+        self.table_name = table_name
+
+    def create_table(self):
+        # Connect to the database
+        connection = sqlite3.connect(self.database_name)
+        cursor = connection.cursor()
+
+        # Make the table if it does not exist
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS datos_fn (
-                periodo TEXT,
+                period TEXT,
                 ticker TEXT,
-                precio_maximo REAL,
-                precio_minimo REAL,
-                promedio REAL,
-                volatilidad REAL
+                max_price REAL,
+                min_price REAL,
+                average_price REAL,
+                volatility REAL
             )
         """)
-        conn.commit()
-        return conn,cur
-    
-    
+
+        connection.commit()
+        return connection, cursor
+
+
+# This class downloads and analyzes asset prices
 class AssetAnalyzer:
-    def __init__(self, ticker:str, fecha_inicio:str, fecha_fin:str):
+    def __init__(self, ticker: str, start_date: str, end_date: str):
         self.ticker = ticker
-        self.fecha_inicio = fecha_inicio
-        self.fecha_fin = fecha_fin 
-        
-    def descargar_datos(self):
-        df = yf.download(self.ticker, self.fecha_inicio, self.fecha_fin)
-        if df.empty:
-            print(f"{self.ticker} no encontrado")
+        self.start_date = start_date
+        self.end_date = end_date
+
+    def download_data(self):
+        # Get stock data from Yahoo Finance
+        data = yf.download(
+            self.ticker,
+            start=self.start_date,
+            end=self.end_date
+        )
+
+        # Check if we got any data
+        if data.empty:
+            print(f"{self.ticker} was not found")
             return None
-        else:
-            df_cierre = df["Close"]
-            return df_cierre
-        
-    def analizar_datos(self,precios_cierre : int|float):
-        precio_maximo = np.max(precios_cierre)
-        precio_minimo = np.min(precios_cierre)
-        precio_promedio = np.mean(precios_cierre)
-        volatilidad = np.std(precios_cierre)
-        return precio_maximo,precio_minimo,precio_promedio,volatilidad
-    
-    def guardar_datos(self,maximo,minimo,promedio,volatilidad):
-        db = BaseDeDatos('my_db','datos_fn')
-        conn, cur = db.crear_tabla()
-        periodo = f"{self.fecha_inicio} - {self.fecha_fin}"
-        cur.execute("""
-            INSERT INTO datos_fn (periodo, ticker, precio_maximo, precio_minimo, promedio, volatilidad)
+
+        # Get only the closing prices
+        closing_prices = data["Close"]
+        return closing_prices
+
+    def analyze_data(self, closing_prices):
+        # Find the highest and lowest prices
+        max_price = np.max(closing_prices)
+        min_price = np.min(closing_prices)
+
+        # Get the average price and volatility
+        average_price = np.mean(closing_prices)
+        volatility = np.std(closing_prices)
+
+        return max_price, min_price, average_price, volatility
+
+    def save_data(self, max_price, min_price, average_price, volatility):
+        # Open the database and create the table
+        database = Database("my_db", "datos_fn")
+        connection, cursor = database.create_table()
+
+        # Save the date range as one string
+        period = f"{self.start_date} - {self.end_date}"
+
+        # Add the results to the database
+        cursor.execute("""
+            INSERT INTO datos_fn (
+                period, ticker, max_price, min_price,
+                average_price, volatility
+            )
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (periodo, self.ticker, maximo, minimo, promedio, volatilidad))
-        conn.commit()
-        
-        cur.execute('SELECT * FROM datos_fn')
-        datos = cur.fetchall()
-        for row in datos:
+        """, (
+            period,
+            self.ticker,
+            max_price,
+            min_price,
+            average_price,
+            volatility
+        ))
+
+        connection.commit()
+
+        # Show all the saved data
+        cursor.execute("SELECT * FROM datos_fn")
+        saved_data = cursor.fetchall()
+
+        for row in saved_data:
             print(row)
-        
+
+        # Close the database connection
+        cursor.close()
+        connection.close()
+
 
 def main():
+    # Pick the stock and the dates
     ticker = "TSLA"
-    fecha_inicio = '2025-1-1'
-    fecha_fin = '2026-1-1'
-    asset1 = AssetAnalyzer(ticker, fecha_inicio, fecha_fin)
-    datos = asset1.descargar_datos()
-    if datos is not None:
-        maximo, minimo, promedio, volatilidad = asset1.analizar_datos(datos)
-        print(asset1.guardar_datos
-        (round(maximo,2),round(minimo,2),round(promedio,2),round(volatilidad, 2)))
+    start_date = "2025-01-01"
+    end_date = "2026-01-01"
+
+    # Create the analyzer and download the data
+    asset = AssetAnalyzer(ticker, start_date, end_date)
+    data = asset.download_data()
+
+    # Analyze and save the data if we got some
+    if data is not None:
+        max_price, min_price, average_price, volatility = (
+            asset.analyze_data(data)
+        )
+
+        asset.save_data(
+            round(max_price, 2),
+            round(min_price, 2),
+            round(average_price, 2),
+            round(volatility, 2)
+        )
     else:
-        print(asset1.descargar_datos())
-        
+        print("No data to analyze")
+
+
+# Run the program
 if __name__ == "__main__":
     main()
